@@ -2,14 +2,102 @@ import sys, os, json, time
 location = os.path.abspath(os.path.dirname(os.path.realpath(__file__)))
 
 
-class syntax_error(Exception):
-    def __init__(self, *args):
-        super().__init__(*args)
+class CILcolor:
+    
+    fg_color = {
+        'black': '\x1b[30m',
+        'red': '\x1b[31m',
+        'green': '\x1b[32m',
+        'yellow': '\x1b[33m',
+        'blue': '\x1b[34m',
+        'magenta': '\x1b[35m',
+        'cyan': '\x1b[36m',
+        'white': '\x1b[37m',         
+        'none': '\x1b[39m',
+        'b-black': '\x1b[90m',
+        'b-red': '\x1b[91m',
+        'b-green': '\x1b[92m',
+        'b-yellow': '\x1b[93m',
+        'b-blue': '\x1b[94m',
+        'b-magenta': '\x1b[95m',
+        'b-cyan': '\x1b[96m',
+        'b-white': '\x1b[97m',
+    }
+    bg_color = {
+        'black': '\x1b[40m',
+        'red': '\x1b[41m',
+        'green': '\x1b[42m',
+        'yellow': '\x1b[43m',
+        'blue': '\x1b[44m',
+        'magenta': '\x1b[45m',
+        'cyan': '\x1b[46m',
+        'white': '\x1b[47m',         
+        'none': '\x1b[49m',
+        'b-black': '\x1b[100m',
+        'b-red': '\x1b[101m',
+        'b-green': '\x1b[102m',
+        'b-yellow': '\x1b[103m',
+        'b-blue': '\x1b[104m',
+        'b-magenta': '\x1b[105m',
+        'b-cyan': '\x1b[106m',
+        'b-white': '\x1b[107m',
+    }    
+    
+    def __init__(self) -> None:
+        pass
+    
+    def color(self, string:str, color:str|tuple|list) -> str:
+        return self.__check_color(string, color, self.fg_color, 38, 39) if color else string
+    
+    def style(self, string:str, color:str|tuple|list = None, background:str|tuple|list = None, bold:bool = False, italic:bool = False, underline:bool = False ) -> str:
+        
+        if color: string = self.__check_color(string, color, self.fg_color, 38, 39)
+            
+        if background: string = self.__check_color(string, background, self.bg_color, 48, 49)
+        
+        if bold: string = f"\x1b[1m{string}\x1b[0m"
+        
+        if italic: string = f"\x1b[3m{string}\x1b[0m"
+        
+        if underline: string = f"\x1b[4m{string}\x1b[0m"
+            
+        return string
+
+    def __check_color(self,string, color:str, dict_:dict, code:int, code_end:int):
+        
+        if isinstance(color, tuple) or isinstance(color, list) and len(color) >= 2:
+            ansi_code = f'\x1b[{code};2;{color[0]};{color[1]};{color[2]}m'
+            string = f"{ansi_code}{string}\x1b[{code_end}m"
+        
+        elif isinstance(color, str):
+            ansi_color_code = dict_.get(color, f"\x1b[{code_end}m")
+            string = f"{ansi_color_code}{string}\x1b[{code_end}m"
+            
+        return string
+Color = CILcolor()
+
+
+class SyntaxError(Exception):
+    def __init__(self, text = None, data_list = None, index:int = 0):
+        error_message = ''
+        
+        if text:
+            error_message+=f"{Color.color(text, 'red')}\n"
+        
+        if data_list:
+            data_list[index] = Color.color(data_list[index], 'b-red')
+            error_message += f"{Color.color('>>>', 'cyan')} {' '.join(data_list)}\n"
+        
+        len_ = lambda value: len(value) + 1
+        lenght = sum(map(len_, data_list[:index])) if data_list else len(text) if text else 0
+        error_message += f"{Color.color('>>>','cyan')} {'-'*lenght}^"
+        
+        super().__init__(error_message)
+
 
 class Database_error(Exception):
     def __init__(self, *args):
         super().__init__(*args)
-
 
 
 class Database:
@@ -88,35 +176,128 @@ class Database:
     
     def List(self, filter = "All") -> list[dict]:
         # If the filter is "All", return all elements
-        if filter == "All":
+        if filter.lower() == "all":
             return list(self.data.values())
 
         # Otherwise, filter items based on the `mark` field
         filtered_items = [item for item in self.data.values() if item.get("status") == filter]
         return filtered_items
 
-class parser:
+
+class token:
+    def __init__(self, argument:dict, fallback:dict|None, optiones:dict|None, method):
+        self.argument = argument
+        self.fallback = fallback
+        self.optiones = optiones
+        self.method = method
     
-    def __init__(self):
-        pass
+    def generate_key(self, data_list: list) -> dict:
+        if len(data_list) != len(self.argument):
+            raise ValueError("Data list length must match argument keys length.")
+
+        return {name: data for name, data in zip(self.argument.keys(), data_list)}
+
+
+class Parser:
+    def __init__(self, valid_keywords: dict):
+        self.valid_keywords = valid_keywords
+        
+    def check_syntax(self, token: list | tuple) -> callable:
+        
+        #check if token[0] the operator is valid or not
+        if not token[0].lower() in self.valid_keywords.keys():
+            raise SyntaxError(text="Invalid command", data_list=token, index=0)
+        
+        #gathering important info
+        args_provided = token[1:]
+        validate = self.valid_keywords[token[0]]
+        expected_args = list(validate.argument.keys())
+        options = validate.optiones if validate.optiones is not None else {}
+        fallbacks = validate.fallback if validate.fallback is not None else {}
+        
+        if len(args_provided) < len(expected_args):
+            for missing_arg in expected_args[len(args_provided):]:
+                if missing_arg in fallbacks:
+                    args_provided.append(fallbacks[missing_arg])
+                else:
+                    raise SyntaxError(text=f"Missing required argument: {expected_args[len(args_provided)]}",data_list=token+['_______'],index=len(args_provided)+1)
+        
+        elif len(args_provided) > len(expected_args):
+            raise SyntaxError(text="Too many arguments provided", data_list=token, index=len(token) - 1)
+        
+        
+        for num, (arg, (arg_name, expected_type)) in enumerate(zip(args_provided, validate.argument.items())):
+            
+            #check if provided have sam eoption or not
+            try:
+                arg_cast = expected_type(arg)
+            except ValueError:
+                raise SyntaxError(text=f"Argument '{arg}' should be of type {expected_type.__name__}", data_list=token, index=num + 1)
+            
+            #check if options remain or not
+            if arg_name in options:
+                if not arg in options[arg_name]:
+                    raise SyntaxError(text=f"Argument '{arg}' should be one of {options[arg_name]}", data_list=token, index=num + 1)
+            
+        
+        return lambda: validate.method(**validate.generate_key(args_provided))
     
+    def get(self):
+        token = sys.argv[1:]
+        return self.check_syntax(token)
+
 
 class Decorater:
     
     def __init__(self):
         pass
-    
-    
+
+
 def main():
     database = Database()
-    # database.Add("my first task ")
-    # print(database.Delete('1'))
-    # database.Update("5", "I am edited task 2")
-    # database.Mark("0", "done")
-    # database.Mark("4", "in-progress")
-    # print(database.List('todo'))
-    
-    
+    keywords = {
+        'add' : token(
+            argument = {'description':str},
+            fallback = None,
+            optiones = None,
+            method = database.Add
+        ),
+        'update' : token(
+            argument = {'id_':int, 'description':str},
+            fallback = None,
+            optiones = None,
+            method = database.Update
+        ),
+        'delete' : token(
+            argument = {'id_':int},
+            fallback = None,
+            optiones = None,
+            method = database.Delete
+        ),
+        'mark-in-progress' : token(
+            argument = {'id_':int, 'status':str},
+            fallback = {'status':'in-progress'},
+            optiones = None,
+            method = database.Mark
+        ),
+        'mark-done' : token(
+            argument = {'id_':int, 'status':str},
+            fallback = {'status':'done'},
+            optiones = None,
+            method = database.Mark
+        ),
+        'list' : token(
+            argument = {'filter':str},
+            fallback = {'filter':'all'},
+            optiones = {'filter':('done', 'todo', 'in-progress','all')},
+            method = database.List
+        ),
+    }
+    parser = Parser(keywords)
+    decorater = Decorater()
+
+    method_ = parser.get()
+    print(method_())
 
 
 if __name__ == "__main__":

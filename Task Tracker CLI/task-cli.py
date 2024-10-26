@@ -185,11 +185,12 @@ class Database:
 
 
 class token:
-    def __init__(self, argument:dict, fallback:dict|None, optiones:dict|None, method):
+    def __init__(self, argument:dict, fallback:dict|None, optiones:dict|None, method, help_text):
         self.argument = argument
         self.fallback = fallback
         self.optiones = optiones
         self.method = method
+        self.help_text = help_text
     
     def generate_key(self, data_list: list) -> dict:
         if len(data_list) != len(self.argument):
@@ -244,7 +245,41 @@ class Parser:
     
     def get(self):
         token = sys.argv[1:]
+        if token == [] or None:
+            return None
+        
+        if token[0].lower() == 'help':
+            return self.help
+
         return self.check_syntax(token)
+
+    def help(self) -> None:
+        help_texts = []
+        for keyword, tok in self.valid_keywords.items():
+            # Highlighted command name and description
+            command_name = Color.color(keyword, 'cyan')
+            description = Color.color(tok.help_text, 'green')
+            help_text = f"{command_name}: {description}\n"
+            
+            # Argument details with type, fallback, and options
+            for arg_name, arg_type in tok.argument.items():
+                arg_display = Color.color(arg_name, 'yellow')
+                arg_type_display = Color.color(arg_type.__name__, 'blue')
+                fallback_value = tok.fallback.get(arg_name, "None") if tok.fallback else "None"
+                fallback_display = Color.color(fallback_value, 'magenta')
+                
+                # Options details if available
+                options = tok.optiones.get(arg_name) if tok.optiones and arg_name in tok.optiones else None
+                options_display = f"{Color.color(str(options), 'red')}" if options else "None"
+                
+                help_text += (
+                    f"  - {arg_display} (Type: {arg_type_display}, "
+                    f"Fallback: {fallback_display}, Options: {options_display})\n"
+                )
+            
+            help_texts.append(help_text)
+        
+        return "\n".join(help_texts)
 
 
 class Decorater:
@@ -256,52 +291,59 @@ class Decorater:
 def main():
     database = Database()
     keywords = {
-        'add' : token(
-            argument = {'description':str},
-            fallback = None,
-            optiones = None,
-            method = database.Add
+        'add': token(
+            argument={'description': str},
+            fallback=None,
+            optiones=None,
+            method=database.Add,
+            help_text='Adds a new item with the specified description.'
         ),
-        'update' : token(
-            argument = {'id_':int, 'description':str},
-            fallback = None,
-            optiones = None,
-            method = database.Update
+        'update': token(
+            argument={'id_': int, 'description': str},
+            fallback=None,
+            optiones=None,
+            method=database.Update,
+            help_text='Updates the item with the specified ID to the new description.'
         ),
-        'delete' : token(
-            argument = {'id_':int},
-            fallback = None,
-            optiones = None,
-            method = database.Delete
+        'delete': token(
+            argument={'id_': int},
+            fallback=None,
+            optiones=None,
+            method=database.Delete,
+            help_text='Deletes the item with the specified ID.'
         ),
-        'mark-in-progress' : token(
-            argument = {'id_':int, 'status':str},
-            fallback = {'status':'in-progress'},
-            optiones = None,
-            method = database.Mark
+        'mark-in-progress': token(
+            argument={'id_': int, 'status': str},
+            fallback={'status': 'in-progress'},
+            optiones=None,
+            method=database.Mark,
+            help_text='Marks the item with the specified ID as in-progress.'
         ),
-        'mark-done' : token(
-            argument = {'id_':int, 'status':str},
-            fallback = {'status':'done'},
-            optiones = None,
-            method = database.Mark
+        'mark-done': token(
+            argument={'id_': int, 'status': str},
+            fallback={'status': 'done'},
+            optiones=None,
+            method=database.Mark,
+            help_text='Marks the item with the specified ID as done.'
         ),
-        'list' : token(
-            argument = {'filter':str},
-            fallback = {'filter':'all'},
-            optiones = {'filter':('done', 'todo', 'in-progress','all')},
-            method = database.List
+        'list': token(
+            argument={'filter': str},
+            fallback={'filter': 'all'},
+            optiones={'filter': ('done', 'todo', 'in-progress', 'all')},
+            method=database.List,
+            help_text='Lists items based on the specified filter.'
         ),
     }
+    
     parser = Parser(keywords)
     decorater = Decorater()
 
     method_ = parser.get()
+    if method_ is None:
+        pass
+    
     print(method_())
 
 
 if __name__ == "__main__":
     main()
-
-    
-

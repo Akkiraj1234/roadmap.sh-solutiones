@@ -160,8 +160,30 @@ class SyntaxError(Exception):
 
 
 class Database_error(Exception):
-    def __init__(self, *args):
-        super().__init__(*args)
+    """
+    Exception raised for errors related to database operations.
+
+    This exception is intended to be used when an error occurs during
+    database interactions, allowing for better error handling and
+    debugging by providing a formatted error message.
+
+    Attributes:
+        message (str): A formatted message describing the error.
+        error (str): An optional additional error message that provides more context.
+
+    Parameters:
+        text (str): The main error message to be displayed.
+        error (str, optional): An additional error message to provide more details.
+                               If not provided, defaults to an empty string.
+
+    Example:
+        raise Database_error("Failed to connect to the database", "Timeout error")
+    """
+
+    def __init__(self, text, error=None):
+        message = Color.color(text, color='red')
+        error = Color.color(error if error else '', color='b-red')
+        super().__init__(message + ':' + error)
 
 
 class Database:
@@ -196,10 +218,10 @@ class Database:
             with open(self.database_path, encoding="Utf-8", mode="w") as fp:
                 fp.write("{}")
         except PermissionError as e:
-            print(e)
+            raise Database_error('Permission denied while creating the database', e)
         return {}
     
-    def _load(self) -> dict:
+    def _load(self):
         """
         Loads data from the JSON database file.
 
@@ -214,6 +236,7 @@ class Database:
             with open(self.database_path, mode="r", encoding='Utf-8') as fp:
                 return json.load(fp)
         except (json.JSONDecodeError):
+            print(Color.color("Failed to decode JSON data:",'red'), Color.color("Data set rest insialized new empty Database",'b-red'))
             return {}
         
         except (FileNotFoundError):
@@ -237,7 +260,7 @@ class Database:
                 fp.write(json.dumps(data, ensure_ascii=False))
                 
         except (FileNotFoundError, PermissionError) as e:
-            raise Database_error(f"Error updating database: {e}")
+            raise Database_error(f"Error updating database", e)
     
     def _unique_id(self) -> int:
         """
@@ -259,6 +282,52 @@ class Database:
         
         return unique_id
     
+    def _format(self, tasks: list[dict]) -> str:
+        """
+        Formats the list of tasks into a readable table-like string.
+
+        Args:
+            tasks (list[dict]): A list of tasks to format.
+
+        Returns:
+            str: A formatted string representation of the tasks in a table format.
+        """
+        # Header for the table with colors
+        header = f"{Color.color('Task ID', color='b-blue'):<18} | " \
+                f"{Color.color('Description', color='b-green'):<70} | " \
+                f"{Color.color('Status', color='b-yellow'):<22} | " \
+                f"{Color.color('Created At', color='b-cyan'):<25} | " \
+                f"{Color.color('Updated At', color='b-cyan'):<25}"
+        formatted_tasks = [header]
+        formatted_tasks.append("-" * 122)
+        
+        def create_new_raw(key, task, status, created_at, updated_at):
+            task_color = 'green' if status == 'Completed' else 'red'
+            formatted_tasks.append(
+                f"{Color.color(key, color='red'):<18} | " 
+                f"{Color.color(task, color='cyan'):<70} | " 
+                f"{Color.color(status, color=task_color):<22} | " 
+                f"{Color.color(created_at, color='cyan'):<25} | " 
+                f"{Color.color(updated_at, color='cyan'):<25}"
+            )
+        
+        for key, task in tasks:
+            # Convert timestamps to readable date format using time module
+            created_at = time.strftime("%d %b %y", time.localtime(task['createdAt']))
+            updated_at = time.strftime("%d %b %y", time.localtime(task['updatedAt']))
+            length = len(task['description'])
+            description = task['description']
+            
+            create_new_raw(key, description[:60], task['status'], created_at, updated_at)
+            
+            if length > 60:
+                remaining_description = description[60:]
+                while remaining_description:
+                    create_new_raw('', remaining_description[:60], '', '', '')
+                    remaining_description = remaining_description[60:]
+        
+        return '\n'.join(formatted_tasks)
+
     def Add(self,description:str) -> bool:
         """
         Adds a new task entry to the database.
@@ -278,11 +347,11 @@ class Database:
             'createdAt': time.time(),
             'updatedAt': time.time()
         }
-        self.data[self._unique_id()] = data
+        id = self._unique_id()
+        self.data[id] = data
         
-        try: self._update(self.data)
-        except Database_error: return False
-        finally: return True
+        self._update(self.data)
+        return Color.color("Task added successfully, ","yellow")+Color.color(f"Task Id: {id}","cyan")
     
     def Delete(self, id_:int) -> dict|None:
         """
@@ -294,31 +363,37 @@ class Database:
         Returns:
             dict|None: The deleted task's data if the task was found, or None if the ID did not exist.
         """
-        data = self.data.pop(id_, None)
+        if id_ not in self.data:
+            raise Database_error(f"Task with ID {id_} does not exist.")
+        
+        data = self.data.pop(id_)
         self._update(self.data)
-        return data
+        return Color.color("Task deleted: ","yellow")+Color.color(f"'{data['description']}'","cyan")
 
-    def Update(self, id_:int, description:str|None = None, status:str|None = None) -> dict|None:
-        """
-        Updates the details of an existing task in the database. update anything u provided
-        decription or status or both if given else skiped
+    def Update(self, id_: int, description: str | None = None, status: str | None = None) -> str:
+        """Updates the details of an existing task in the database."""
+        if id_ not in self.data:
+            raise Database_error(f"Task with ID {id_} does not exist.")
         
-        Args:
-            id_ (int): Unique ID of the task to update.
-            description (str | None, optional): New description for the task, if provided. Defaults to None.
-            status (str | None, optional): New status for the task, if provided. Defaults to None.
-
-        Returns:
-            Dict|None: Updates are made in place in `self.data`.
-        """
-        if not id_ in self.data.keys():
-            return False
+        updates = []
+        task = self.data[id_]
         
-        self.data[id_]['description'] = description if description else self.data[id_]['description']
-        self.data[id_]['status'] = status if status else self.data[id_]['status']
+        if description is not None:
+            old_description = task.get('description', 'No description')
+            task['description'] = description
+            updates.append(Color.color("description changed from","cyan")+ Color.color(" '{old_description}'","yellow")+Color.color(" to ","cyan")+Color.color("'{description}'","yellow"))
         
+        if status is not None:
+            old_status = task.get('status', 'done')
+            task['status'] = status
+            updates.append(Color.color("status changed from","cyan")+ Color.color(" '{old_status}'","yellow")+Color.color(" to ","cyan")+Color.color("'{status}'","yellow"))
+            
         self._update(self.data)
-    
+        
+        # Formulate the update message
+        updated_fields = ', '.join(updates)
+        return Color.color(f"Task with ID {id_} updated:","yellow")+f"{updated_fields}."
+
     def Mark(self, id_:int, status:str) -> None:
         """
         Marks a task with a new status. 
@@ -328,7 +403,7 @@ class Database:
             id_ (int): Unique ID of the task to mark.
             status (str): New status to apply to the task.
         """
-        self.Update(id_, description=None, status=status)
+        return self.Update(id_, description=None, status=status)
     
     def List(self, filter = "All") -> list[dict]:
         """
@@ -343,11 +418,12 @@ class Database:
         """
         # If the filter is "All", return all elements
         if filter.lower() == "all":
-            return list(self.data.values())
-
-        # Otherwise, filter items based on the `mark` field
-        filtered_items = [item for item in self.data.values() if item.get("status") == filter]
-        return filtered_items
+            data =  list(self.data.items())
+        
+        else:
+            data = [(key,item) for key, item in self.data.items() if item.get("status") == filter]
+        
+        return self._format(data)
 
 
 class token:
@@ -482,7 +558,7 @@ class Parser:
         """
         token = sys.argv[1:]
         if token == [] or None:
-            return None
+            raise SyntaxError("There is no command to execute")
         
         if token[0].lower() == 'help':
             return self.help
@@ -523,20 +599,6 @@ class Parser:
             help_texts.append(help_text)
         
         return "\n".join(help_texts)
-
-
-class Decorater:
-    
-    def __init__(self):
-        pass
-
-    def decorate(self, method:callable) -> None:
-        try:
-            h = method()
-        except Exception as e:
-            h = f"Error: {e}"
-        
-        print(h)
 
 
 def main():
@@ -587,12 +649,21 @@ def main():
     }
     
     parser = Parser(keywords)
-    decorater = Decorater()
 
     # implementation
-    method_ = parser.get()
-    decorater.decorate(method_)
+    try: method_ = parser.get()
+    except SyntaxError as e: print(e); return
+    
+    #running the method
+    try: print(method_())
+    except (Database_error, ValueError) as e: print(e)
+
+
+def color_fixer():
+    print(Color.color("hello world", 'red'))
+    os.system('cls' if os.name == 'nt' else "clear")
 
 
 if __name__ == "__main__":
+    color_fixer()
     main()

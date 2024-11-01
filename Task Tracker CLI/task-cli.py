@@ -294,18 +294,18 @@ class Database:
         """
         # Header for the table with colors
         header = f"{Color.color('Task ID', color='b-blue'):<18} | " \
-                f"{Color.color('Description', color='b-green'):<70} | " \
+                f"{Color.color('Description', color='b-green'):<60} | " \
                 f"{Color.color('Status', color='b-yellow'):<22} | " \
                 f"{Color.color('Created At', color='b-cyan'):<25} | " \
                 f"{Color.color('Updated At', color='b-cyan'):<25}"
         formatted_tasks = [header]
-        formatted_tasks.append("-" * 122)
+        formatted_tasks.append("-" * 112)
         
         def create_new_raw(key, task, status, created_at, updated_at):
             task_color = 'green' if status == 'Completed' else 'red'
             formatted_tasks.append(
                 f"{Color.color(key, color='red'):<18} | " 
-                f"{Color.color(task, color='cyan'):<70} | " 
+                f"{Color.color(task, color='cyan'):<60} | " 
                 f"{Color.color(status, color=task_color):<22} | " 
                 f"{Color.color(created_at, color='cyan'):<25} | " 
                 f"{Color.color(updated_at, color='cyan'):<25}"
@@ -318,13 +318,13 @@ class Database:
             length = len(task['description'])
             description = task['description']
             
-            create_new_raw(key, description[:60], task['status'], created_at, updated_at)
+            create_new_raw(key, description[:50], task['status'], created_at, updated_at)
             
-            if length > 60:
-                remaining_description = description[60:]
+            if length > 50:
+                remaining_description = description[50:]
                 while remaining_description:
-                    create_new_raw('', remaining_description[:60], '', '', '')
-                    remaining_description = remaining_description[60:]
+                    create_new_raw('', remaining_description[:50], '', '', '')
+                    remaining_description = remaining_description[50:]
         
         return '\n'.join(formatted_tasks)
 
@@ -381,12 +381,12 @@ class Database:
         if description is not None:
             old_description = task.get('description', 'No description')
             task['description'] = description
-            updates.append(Color.color("description changed from","cyan")+ Color.color(" '{old_description}'","yellow")+Color.color(" to ","cyan")+Color.color("'{description}'","yellow"))
+            updates.append(Color.color("description changed from","cyan")+ Color.color(f" '{old_description}'","yellow")+Color.color(" to ","cyan")+Color.color(f"'{description}'","yellow"))
         
         if status is not None:
             old_status = task.get('status', 'done')
             task['status'] = status
-            updates.append(Color.color("status changed from","cyan")+ Color.color(" '{old_status}'","yellow")+Color.color(" to ","cyan")+Color.color("'{status}'","yellow"))
+            updates.append(Color.color("status changed from","cyan")+ Color.color(f" '{old_status}'","yellow")+Color.color(" to ","cyan")+Color.color(f"'{status}'","yellow"))
             
         self._update(self.data)
         
@@ -660,7 +660,7 @@ def main():
 
 
 def color_fixer():
-    print(Color.color("hello world", 'red'))
+    print(Color.color("Loading..", 'red'), flush=True)
     os.system('cls' if os.name == 'nt' else "clear")
 
 

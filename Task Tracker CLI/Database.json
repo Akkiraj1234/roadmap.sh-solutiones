@@ -1,1 +1,8 @@
-{"0": {"description": "this is a demo task [remove it by typing this command : 'task-cli.py delete 0']", "status": "todo", "createdAt": 1730454918.488961, "updatedAt": 1730454918.488961}}
+{
+    "0": {
+        "description": "this is a demo task [remove it by typing this command : 'task-cli.py delete 0']",
+        "status": "todo",
+        "createdAt": 1730454918.488961,
+        "updatedAt": 1730454918.488961
+    }
+}

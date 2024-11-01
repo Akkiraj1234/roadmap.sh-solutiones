@@ -21,8 +21,8 @@ Task Tracker CLI is a simple, Python-based command-line interface for managing p
 
 1. **Clone the Repository**:
     ```bash
-    git clone https://github.com/yourusername/task-tracker-cli.git
-    cd task-tracker-cli
+    git clone https://github.com/Akkiraj1234/roadmap.sh-solutiones
+    cd "Task Tracker CLI"
     ```
 
 2. **Run the Script**:
@@ -59,3 +59,27 @@ The task data is stored in `tasks.json`, structured as follows:
         "updatedAt": 1730454918.488961
     }
 }
+```
+
+### Each task entry includes:
+
+- **description**: Brief description of the task
+- **status**: Current task status *(e.g., "todo", "in progress", "completed")*
+- **createdAt**: Timestamp of task creation
+- **updatedAt**: Timestamp of the last update
+
+## Contributing
+Contributions are welcome! Follow these steps:
+
+1. Fork the repository.
+2. Create a new branch for your feature or bug fix.
+3. Make changes and test thoroughly.
+4. Submit a pull request for review.
+
+### License
+This project is licensed under the MIT License. See the LICENSE file for details.
+
+### Developed as part of the roadmap.sh Task Tracker project.
+
+This version includes a clear structure with consistent formatting for easy readability and usage. Feel free to modify the repository link and task statuses if needed. Let me know if there’s anything more to add!
+
